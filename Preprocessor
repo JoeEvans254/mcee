@@ -1,0 +1,192 @@
+import os
+import time
+import librosa
+import numpy as np
+import soundfile as sf
+import sqlite3
+
+def get_latest_mood_genre_user_id():
+    conn = sqlite3.connect('database.db')
+    c = conn.cursor()
+    c.execute("SELECT mood_name, user_id FROM moods ORDER BY rowid DESC LIMIT 1")
+    row = c.fetchone()
+
+    if row is not None:
+        latest_mood, user_id = row
+        c.execute("SELECT genre_name FROM genre WHERE user_id = ?", (user_id,))
+        genre_row = c.fetchone()
+        latest_genre = genre_row[0] if genre_row else None
+    else:
+        latest_mood = None
+        latest_genre = None
+        user_id = None
+
+    conn.close()
+    return latest_mood, latest_genre, user_id
+
+def select_songs(genre_path, mood_path):
+    songs_path = os.path.join('/home/ec2-user/', genre_path, mood_path)
+    audio_files = [os.path.join(songs_path, f) for f in os.listdir(songs_path) if f.endswith('.mp3')]
+    selected_songs = audio_files[:6]  # Selecting at most 6 songs
+    return selected_songs
+
+def extract_segments(audio_file, max_length=60):
+    try:
+        y, sr = librosa.load(audio_file, sr=None, res_type='kaiser_best')
+        mel_spectrogram = librosa.feature.melspectrogram(y=y, sr=sr)
+        energy = np.sum(mel_spectrogram**2, axis=0)
+        energy = librosa.util.normalize(energy)
+        max_energy_index = np.argmax(energy)
+
+        segment_length_samples = min(max_length * sr, len(y))
+
+        segment_start_indices = {
+            "drop": max(0, int(max_energy_index - segment_length_samples // 2)),
+            "build_up": max(0, int(max_energy_index - segment_length_samples // 2 - 10 * sr)),
+            "breakdown": max(0, int(max_energy_index - segment_length_samples // 2 - 20 * sr)),
+            "outro": max(0, int(max_energy_index - segment_length_samples // 2 - 30 * sr)),
+        }
+
+        segments = {
+            segment_type: y[start:start + segment_length_samples]
+            for segment_type, start in segment_start_indices.items()
+        }
+
+        return segments, sr
+
+    except Exception as e:
+        print(f"Error processing {audio_file}: {e}")
+        return None, None
+
+def calculate_features_batch(segments, sr):
+    rms = np.mean([librosa.feature.rms(y=segment) for segment in segments])
+    spectral_centroid = np.mean([librosa.feature.spectral_centroid(y=segment, sr=sr) for segment in segments])
+    spectral_bandwidth = np.mean([librosa.feature.spectral_bandwidth(y=segment, sr=sr) for segment in segments])
+    spectral_contrast = np.mean([librosa.feature.spectral_contrast(y=segment, sr=sr) for segment in segments])
+    spectral_rolloff = np.mean([librosa.feature.spectral_rolloff(y=segment, sr=sr) for segment in segments])
+    zcr = np.mean([librosa.feature.zero_crossing_rate(y=segment) for segment in segments])
+    chroma = np.mean([librosa.feature.chroma_stft(y=segment, sr=sr) for segment in segments])
+    tempo, _ = librosa.beat.beat_track(y=np.concatenate(segments), sr=sr)
+
+    # Additional features
+    rhythm_pattern = np.mean([librosa.feature.tempogram(y=segment, sr=sr) for segment in segments])
+    pitch_variation = np.mean([librosa.feature.poly_features(y=segment, sr=sr)[1] for segment in segments])
+
+    features = {
+        'rms': rms,
+        'spectral_centroid': spectral_centroid,
+        'spectral_bandwidth': spectral_bandwidth,
+        'spectral_contrast': spectral_contrast,
+        'spectral_rolloff': spectral_rolloff,
+        'zcr': zcr,
+        'chroma': chroma,
+        'tempo': tempo,
+        'rhythm_pattern': rhythm_pattern,
+        'pitch_variation': pitch_variation
+    }
+
+    return features
+
+def calculate_features(segments_list, sr):
+    batch_size = 100  # Define batch size
+    num_batches = len(segments_list) // batch_size + (len(segments_list) % batch_size != 0)
+    all_features = []
+
+    for batch_idx in range(num_batches):
+        start_idx = batch_idx * batch_size
+        end_idx = min((batch_idx + 1) * batch_size, len(segments_list))
+        batch_segments = [segments for segments, _ in segments_list[start_idx:end_idx]]
+        batch_features = calculate_features_batch(batch_segments, sr)
+        all_features.append(batch_features)
+
+    # Aggregate features from all batches if needed
+    aggregated_features = {feature: np.mean([f[feature] for f in all_features]) for feature in all_features[0]}
+    return aggregated_features
+
+def select_best_segments(segments_list):
+    segment_types = ["drop", "build_up", "breakdown", "outro"]
+    selected_segments = []
+
+    for segments, sr in segments_list:
+        if segments is None or sr is None:
+            continue
+
+        best_segment_type = None
+        best_score = -1
+
+        for segment_type in segment_types:
+            if segment_type in [selected_type for _, _, selected_type in selected_segments]:
+                continue
+
+            features = calculate_features_batch([segments[segment_type]], sr)
+            score = sum(features.values())
+
+            if score > best_score:
+                best_score = score
+                best_segment_type = segment_type
+
+        if best_segment_type:
+            selected_segments.append((segments[best_segment_type], sr, best_segment_type))
+
+    return selected_segments
+
+def find_user_folder(base_path, user_id):
+    user_folder = os.path.join(base_path, str(user_id))
+    if os.path.exists(user_folder):
+        return user_folder
+    return None
+
+def save_segment_to_db(task_id, signature_timestamp, user_id):
+    conn = sqlite3.connect('database.db')
+    c = conn.cursor()
+    try:
+        c.execute(
+            "INSERT INTO scheduler (task_id, signature_timestamp, user_id) VALUES (?, ?, ?)",
+            (task_id, signature_timestamp, user_id)
+        )
+        conn.commit()
+    except sqlite3.Error as e:
+        print(f"Database error: {e}")
+    finally:
+        conn.close()
+
+def main():
+    mood, genre, user_id = get_latest_mood_genre_user_id()
+    genre_path = genre.lower() if genre else 'default_genre'
+    mood_path = mood.lower() if mood else 'default_mood'
+
+    base_path = '/home/ec2-user/'
+    user_folder = find_user_folder(base_path, user_id)
+
+    if user_folder is None:
+        print("DiskSpace not allocated")
+        return
+
+    preprocessor_folder = os.path.join(user_folder, "preprocessor")
+    if not os.path.exists(preprocessor_folder):
+        os.makedirs(preprocessor_folder)
+
+    selected_songs = select_songs(genre_path, mood_path)
+    segments_list = [extract_segments(audio_file) for audio_file in selected_songs if audio_file]
+    best_segments = select_best_segments(segments_list[:7])  # Select up to 7 best segments
+    saved_segments = []
+    last_segment_file = None
+    try:
+        for i, (segment, sr, segment_type) in enumerate(best_segments):
+            segment_file = os.path.join(preprocessor_folder, f"best_segment_{i+1}_{segment_type}_{int(time.time())}.wav")
+            sf.write(segment_file, segment, sr)
+            saved_segments.append(segment_file)
+            last_segment_file = segment_file  # Keep track of the last saved segment
+            print(f"Saved: {segment_file}")
+
+        if last_segment_file:
+            save_segment_to_db(os.path.basename(last_segment_file), int(time.time()), user_id)
+    except Exception as e:
+        print(f"Error saving segments: {e}")
+        for segment_file in saved_segments:
+            os.remove(segment_file)
+        print("Deleted all generated segments due to an error.")
+        return
+
+if __name__ == '__main__':
+    main()
