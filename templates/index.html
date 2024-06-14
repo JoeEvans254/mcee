@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCEE : Web Music Player</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        /* Custom styles */
+        body {
+            background-color: #1D0330;
+            color: #D5CEFF;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .heading {
+            font-size: 3rem;
+            font-weight: italics;
+            color: #6622BD;
+            margin-bottom: 1rem;
+        }
+
+        .description {
+            font-size: 1.5rem;
+            margin-bottom: 2rem;
+            overflow: hidden; /* Ensure text doesn't overflow the container */
+            white-space: nowrap; /* Keep the text on a single line */
+            animation: typing 5s steps(40, end); /* Typing animation */
+        }
+
+        @keyframes typing {
+            from {
+                width: 0; /* Start with no width */
+            }
+            to {
+                width: 100%; /* Finish with full width */
+            }
+        }
+
+        .btn {
+            display: none; /* Initially hide the button */
+            background-color: #6622BD;
+            color: #D5CEFF;
+            padding: 0.75rem 2rem;
+            border-radius: 0.5rem;
+            font-size: 1.25rem;
+            transition: background-color 0.3s ease;
+        }
+
+        .btn:hover {
+            background-color: #3A0360;
+        }
+
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            margin-top: 3rem;
+        }
+
+        .feature {
+            background-color: #3A0360;
+            padding: 2rem;
+            border-radius: 0.5rem;
+            text-align: center;
+        }
+
+        .feature h3 {
+            font-size: 1.5rem;
+            font-weight: bold;
+            color: #D5CEFF;
+            margin-bottom: 1rem;
+        }
+
+        .feature p {
+            font-size: 1rem;
+            color: #D5CEFF;
+        }
+
+        /* Login and Signup */
+        .auth-links {
+            display: flex;
+            justify-content: center;
+            margin-top: 2rem;
+        }
+
+        .auth-links a {
+            display: inline-flex;
+            align-items: center;
+            color: #D5CEFF;
+            margin-right: 1rem;
+        }
+
+        .auth-links a svg {
+            fill: #D5CEFF;
+            margin-right: 0.5rem;
+        }
+
+        .top-right-auth-links {
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            display: flex;
+            gap: 1rem; /* Space between links */
+        }
+
+    </style>
+</head>
+
+<body>
+    <div class="top-right-auth-links">
+        <a href="/login" class="auth-link">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
+            </svg>
+            Login
+        </a>
+        <a href="/register" class="auth-link">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+            </svg>
+            Signup
+        </a>
+    </div>
+    <div class="container mx-auto text-center">
+        <h1 class="heading">MCEE </h1>
+        <p class="description" id="description">AI-driven music experience that intuitively understands your emotions</p>
+        <a href="#" class="btn" id="getStartedBtn">Get Started</a>
+
+        <div class="features">
+            <div class="feature">
+                <h3>Personalized Recommendations</h3>
+                <p>Get curated playlists based on your mood and preferences.</p>
+            </div>
+            <div class="feature">
+                <h3>Mood Analysis</h3>
+                <p>Advanced AI algorithms analyze your mood in real-time to adjust the music selection.</p>
+            </div>
+            <div class="feature">
+                <h3>Smart Playlist Creation</h3>
+                <p>Create dynamic playlists that evolve with your changing moods throughout the day.</p>
+            </div>
+            <div class="feature">
+                <h3>Customizable Experience</h3>
+                <p>Adjust settings to tailor the music experience to your unique preferences.</p>
+            </div>
+        </div>
+
+        <div class="auth-links">
+            <a href="#" class="auth-link">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
+                </svg>
+                Login
+            </a>
+            <a href="#" class="auth-link">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                </svg>
+                Signup
+            </a>
+        </div>
+    </div>
+
+    <script>
+        const descriptions = [
+            "Your AI companion that creates personalized mixes based on your emotions",
+            "Get Started Today and Supercharge Your Day"
+        ];
+        const description = document.getElementById('description');
+        const getStartedBtn = document.getElementById('getStartedBtn');
+        
+        let index = 0;
+        let typingInterval = setInterval(() => {
+            description.textContent = descriptions[index];
+            index++;
+            if (index === descriptions.length) {
+                clearInterval(typingInterval);
+                getStartedBtn.style.display = 'inline-block'; // Show the button after typing is finished
+            }
+        }, 10000); // Adjust the typing speed here (milliseconds)
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+   
+   
+<body>
+    <div class="container">
+        <h2 class="text-center">Login</h2>
+        <form action="/login" method="POST">
+            <input type="text" name="username" placeholder="Username" class="form-input" required>
+            <input type="password" name="password" placeholder="Password" class="form-input" required><br> <br>
+            <button type="submit" class="btn-login">Login</button>
+        </form><br> <br>
+        <p class="text-center">Don't have an account? <a href="/register" class="register-link">Register</a></p>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script>
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        const geometry = new THREE.TorusKnotGeometry(10, 3, 100, 16);
+        const material = new THREE.MeshBasicMaterial({ color: 0x1D0330 }); /* Material */
+        const torusKnot = new THREE.Mesh(geometry, material);
+        scene.add(torusKnot);
+
+        camera.position.z = 50;
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            torusKnot.rotation.x += 0.01;
+            torusKnot.rotation.y += 0.01;
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        window.addEventListener('resize', () => {
+            const width = window.innerWidth;
+            const height = window.innerHeight;
+
+            renderer.setSize(width, height);
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+        });
+    </script>
+</body>
+</html>

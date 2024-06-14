@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mcee : Web Music Player</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <script src="{{ url_for('static', filename='micro.js') }}"></script>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 p-6">
+    <div class="phone max-w-lg mx-auto bg-white rounded-lg shadow-md overflow-hidden">
+        <!-- Header Section -->
+        <header class="header p-4">
+            <div class="header-logo">
+                <div>
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                </div>
+            </div>
+            <div class="header-title">
+                <span id="greeting"></span>,
+            </div>
+            <div class="header-buttons">
+                <button class="notifications">
+                    <i class="ai-bell"></i>
+                </button>
+                <button class="avatar">
+                    <img src="https://mfs-mcee.s3.eu-north-1.amazonaws.com/music.256x255.png"/>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main>
+            <!-- Title Section -->
+            <section class="title p-4">
+                <h1>Listening Everyday</h1>
+                <p>Explore millions of music according to your taste</p>
+            </section>
+
+            <!-- Search Section -->
+            <section class="search p-4">
+                <div class="search-inner">
+                    <form action="{{ url_for('stacks') }}" method="POST">
+                        <button class="search-button">
+                            <i class="ai-search"></i>
+                        </button>
+                        <input type="text" class="search-input" name="message" placeholder="Share something with me to generate music" />
+                    </form>
+                </div>
+            </section>
+
+            <!-- Navigation Section -->
+            <nav class="navigation p-4">
+                <a href="#" class="navigation-item active" data-target="overview">Trending</a>
+                <a href="#" class="navigation-item" data-target="songs" onclick="showMusicPlayer()">My Device</a>
+                <a href="#" class="navigation-item" data-target="albums">Ai Mix</a>
+                <a href="#" class="navigation-item" data-target="artists">Profile</a>
+            </nav>
+
+            <!-- Content Sections -->
+            <section class="content p-4" id="overview">
+                
+                <p>Welcome to our mcee ai ! Here, you can explore a wide range of songs, albums, and artists to suit your taste.</p>
+
+              </section>
+
+            <!-- Songs Section -->
+            <section class="content p-4" id="songs" style="display:none;">
+               
+                <!-- Add content for songs here -->
+
+                <!-- Music Player Container -->
+                <div class="genre-form-container" id="musicPlayerContainer">
+                    <div class="music-player">
+                        <h1>Music Player</h1>
+                        <input type="file" id="audioFileInput" accept=".mp3,.wav" onchange="loadAudio()">
+                        <audio controls id="audioPlayer"></audio>
+                        <canvas id="audioVisualizer"></canvas>
+                        <div id="sectionButtons">
+                            <button onclick="setSection('intro')">Intro</button>
+                            <button onclick="setSection('chorus')">Chorus</button>
+                            <button onclick="setSection('outro')">Outro</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Albums Section -->
+            <section class="content p-4" id="albums" style="display:none;">
+                <h2>Albums</h2>
+                <!-- Add content for albums here -->
+                 {{file_path}}
+            </section>
+
+            <!-- Artists Section -->
+            <section class="content p-4" id="artists" style="display:none;">
+                
+                <!-- Add content for artists here -->
+                
+                <!-- Genre Selection Form -->
+                <div class="genre-form-container">
+                    <h1>Choose Your Favourite Genre</h1>
+                    <form action="/add_genre" method="POST">
+                        <label for="genres">Select Genres:</label>
+                        <select name="genre_name" id="genres" multiple>
+                            <option value="HIPHOP">HIPHOP</option>
+                            <option value="RnB_Soul">RnB and Soul</option>
+                            <option value="Reggae">Reggae</option>
+                            <option value="Soft_Rock">Soft Rock</option>
+                            <option value="Jazz_Blues">Jazz and Blues</option>
+                            <option value="Electronic_Pop">Electronic/Pop</option>
+                            <option value="Gospel">Gospel</option>
+                            <option value="Country">Country</option>
+                        </select>
+                        <button type="submit">Select</button>
+                    </form>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer Section -->
+        <footer class="menu p-4">
+            <div class="menu-inner">
+                <a href="#" class="menu-item active">
+                    <i class="ai-home"></i>
+                </a>
+                <a href="#" class="menu-item">
+                    <i class="ai-heart"></i>
+                </a>
+                <a href="#" class="menu-item">
+                    <i class="ai-fire"></i>
+                </a>
+                <a href="#" class="menu-item">
+                    <i class="ai-gear"></i>
+                </a>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        // Function to handle play/pause toggle
+        document.querySelectorAll('.play-button').forEach(button => {
+            button.addEventListener('click', () => {
+                const audioId = button.getAttribute('data-audio');
+                const audio = document.getElementById(audioId);
+
+                if (audio.paused) {
+                    // Pause all other audio elements
+                    document.querySelectorAll('audio').forEach(a => {
+                        if (a !== audio) {
+                            a.pause();
+                            a.parentElement.querySelector('.play-button').textContent = 'Play';
+                        }
+                    });
+
+                    // Play the selected audio
+                    audio.play();
+                    button.textContent = 'Pause';
+                } else {
+                    // Pause the selected audio
+                    audio.pause();
+                    button.textContent = 'Play';
+                }
+
+                // Update button text on pause/play/ended events
+                audio.addEventListener('pause', () => {
+                    button.textContent = 'Play';
+                });
+
+                audio.addEventListener('play', () => {
+                    button.textContent = 'Pause';
+                });
+
+                audio.addEventListener('ended', () => {
+                    button.textContent = 'Play';
+                });
+            });
+        });
+
+        // Navigation item click handler
+        document.querySelectorAll('.navigation-item').forEach(item => {
+            item.addEventListener('click', (event) => {
+                event.preventDefault();
+                document.querySelectorAll('.navigation-item').forEach(navItem => {
+                    navItem.classList.remove('active');
+                });
+                item.classList.add('active');
+
+                document.querySelectorAll('.content').forEach(section => {
+                    section.style.display = 'none';
+                });
+
+                const targetId = item.getAttribute('data-target');
+                document.getElementById(targetId).style.display = 'block';
+            });
+        });
+
+        // Function to show the music player
+        function showMusicPlayer() {
+            document.getElementById('musicPlayerContainer').style.display = 'block';
+        }
+    </script>
+</body>
+</html>
