@@ -1,0 +1,81 @@
+import boto3
+import librosa
+import numpy as np
+
+# AWS credentials and bucket name
+ACCESS_KEY = 'AKIA4MTWIY55JXA3F3I6'
+SECRET_KEY = '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'
+BUCKET_NAME = 'mfs-mcee'
+
+# Initialize S3 client
+s3 = boto3.client('s3', aws_access_key_id=ACCESS_KEY, aws_secret_access_key=SECRET_KEY)
+
+# Function to list all audio files in the S3 bucket
+def list_audio_files(bucket_name):
+    try:
+        response = s3.list_objects_v2(Bucket=bucket_name)
+        audio_files = [obj['Key'] for obj in response['Contents'] if obj['Key'].lower().endswith(('.mp3', '.wav'))]
+        return audio_files
+    except Exception as e:
+        print(f"Error listing audio files: {e}")
+        return []
+
+# Function to download audio file from S3 bucket
+def download_from_s3(bucket_name, file_key):
+    try:
+        response = s3.get_object(Bucket=bucket_name, Key=file_key)
+        audio_data = response['Body'].read()
+        return audio_data
+    except Exception as e:
+        print(f"Error downloading file {file_key}: {e}")
+        return None
+
+# Function to perform crossfade on two audio segments
+def crossfade_audio(audio1, audio2, fade_duration=5000):
+    # Load audio files using Librosa
+    y1, sr1 = librosa.load(audio1)
+    y2, sr2 = librosa.load(audio2)
+    
+    # Ensure both audio segments have the same duration
+    min_len = min(len(y1), len(y2))
+    y1 = y1[:min_len]
+    y2 = y2[:min_len]
+    
+    # Calculate fade in and fade out frames
+    fade_in_frames = int((fade_duration / 1000) * sr1)
+    fade_out_frames = int((fade_duration / 1000) * sr2)
+    
+    # Check if arrays are compatible for concatenation
+    if len(y1[:min_len-fade_out_frames]) != len(y2[fade_in_frames:]):
+        raise ValueError("Audio segments are not compatible for crossfade.")
+    
+    # Create crossfade curve
+    fade_in_curve = np.linspace(0, 1, fade_in_frames)
+    fade_out_curve = np.linspace(1, 0, fade_out_frames)
+    
+    # Apply crossfade
+    crossfade_audio = np.concatenate((y1[:min_len-fade_out_frames] * fade_out_curve, y2[fade_in_frames:] * fade_in_curve))
+    
+    return crossfade_audio, sr1
+
+# Example usage
+if __name__ == "__main__":
+    # Example usage: assuming you have two audio files in your S3 bucket
+    audio_file1 = 'path_to_your_audio_file1_in_bucket.mp3'
+    audio_file2 = 'path_to_your_audio_file2_in_bucket.mp3'
+    
+    # Download audio files from S3
+    audio_data1 = download_from_s3(BUCKET_NAME, audio_file1)
+    audio_data2 = download_from_s3(BUCKET_NAME, audio_file2)
+    
+    # Perform crossfade
+    try:
+        crossfade_audio_data, sample_rate = crossfade_audio(audio_data1, audio_data2)
+        
+        # Save the crossfade audio to a file (e.g., wav)
+        output_file = 'crossfade_output.wav'
+        librosa.output.write_wav(output_file, crossfade_audio_data, sample_rate)
+        
+        print(f"Crossfade completed and saved as {output_file}")
+    except ValueError as e:
+        print(f"Error in crossfade: {e}")
