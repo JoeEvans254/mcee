@@ -1,0 +1,157 @@
+import librosa
+import numpy as np
+import soundfile as sf
+import os
+import sqlite3
+
+class AudioProcessor:
+    def __init__(self, file_path, target_sample_rate, n_fft=2048):
+        try:
+            self.audio, self.sample_rate = librosa.load(file_path, sr=None)
+            if self.sample_rate != target_sample_rate:
+                self.audio = librosa.resample(self.audio, orig_sr=self.sample_rate, target_sr=target_sample_rate)
+                self.sample_rate = target_sample_rate
+        except FileNotFoundError:
+            print(f"Error: The file '{file_path}' was not found.")
+            raise
+        except ValueError as e:
+            print(f"Error: Could not load the file '{file_path}'. {str(e)}")
+            raise
+
+        # Adjust n_fft based on input signal length
+        if len(self.audio) < n_fft:
+            n_fft = len(self.audio) // 2  # Use half of the signal length as n_fft
+            print(f"Warning: n_fft adjusted to {n_fft} due to input signal length.")
+        self.n_fft = n_fft
+
+    def save_audio(self, file_path, audio_data, sample_rate):
+        """Save audio data to a file."""
+        sf.write(file_path, audio_data, sample_rate)
+
+    def crossfade(self, other_audio_processor, transition_start_time):
+        """Perform a crossfade between two audio segments."""
+        assert self.sample_rate == other_audio_processor.sample_rate, "Sample rates must match."
+
+        # Calculate crossfade samples and ensure within audio range
+        crossfade_samples = int(transition_start_time * self.sample_rate)
+        crossfade_samples = min(crossfade_samples, min(len(self.audio), len(other_audio_processor.audio)))
+        crossfade_samples = max(0, crossfade_samples)
+
+        # Linear crossfade
+        fade_in = np.linspace(0, 1, crossfade_samples)
+        fade_out = np.linspace(1, 0, crossfade_samples)
+
+        # Apply crossfade
+        audio1_faded = self.audio[-crossfade_samples:] * fade_out
+        audio2_faded = other_audio_processor.audio[:crossfade_samples] * fade_in
+
+        # Normalize to ensure consistent volume
+        combined_faded = audio1_faded + audio2_faded
+        max_val = np.max(np.abs(combined_faded))
+        if max_val > 1.0:
+            combined_faded = combined_faded / max_val
+
+        # Combine the crossfade segments
+        mixed_audio_crossfade = np.concatenate((
+            self.audio[:-crossfade_samples], combined_faded, other_audio_processor.audio[crossfade_samples:]
+        ))
+        return mixed_audio_crossfade
+
+    def beatmatched_transition(self, other_audio_processor, transition_start_beat):
+        """Perform a beatmatched transition."""
+        assert self.sample_rate == other_audio_processor.sample_rate, "Sample rates must match."
+
+        # Heuristic for beatmatched transition based on beat variability
+        beat_variability_threshold = 5  # Adjust as needed
+        _, beats1 = librosa.beat.beat_track(y=self.audio, sr=self.sample_rate)
+        _, beats2 = librosa.beat.beat_track(y=other_audio_processor.audio, sr=other_audio_processor.sample_rate)
+        beat_variability1 = np.std(np.diff(beats1))
+        beat_variability2 = np.std(np.diff(beats2))
+
+        if beat_variability1 < beat_variability_threshold and beat_variability2 < beat_variability_threshold:
+            closest_beat1 = min(beats1, key=lambda x: abs(x - transition_start_beat))
+            closest_beat2 = min(beats2, key=lambda x: abs(x - transition_start_beat))
+            transition_time1 = librosa.time_to_samples(closest_beat1, sr=self.sample_rate)
+            transition_time2 = librosa.time_to_samples(closest_beat2, sr=other_audio_processor.sample_rate)
+            mixed_audio = self.crossfade(other_audio_processor, transition_start_time=transition_time1 / self.sample_rate)
+            return mixed_audio
+        else:
+            # Choose alternative transition method (e.g., exponential)
+            return self.exponential_transition(other_audio_processor, transition_start_time=1, start_amplitude=1.0, end_amplitude=0.2)
+
+    def exponential_transition(self, other_audio_processor, transition_start_time, start_amplitude=1.0, end_amplitude=0.2, echo_delay=0.1, echo_decay=0.3):
+        """Perform an exponential transition with echo effect between audio segments."""
+        assert self.sample_rate == other_audio_processor.sample_rate, "Sample rates must match."
+
+        # Heuristic for exponential transition based on audio complexity
+        audio_complexity_threshold = 0.5  # Adjust as needed
+        complexity1 = self.compute_audio_complexity()
+        complexity2 = other_audio_processor.compute_audio_complexity()
+
+        transition_samples = int(transition_start_time * self.sample_rate)
+
+        if complexity1 < audio_complexity_threshold and complexity2 < audio_complexity_threshold:
+            decay_curve = np.exp(-np.linspace(0, 10, transition_samples))
+            audio1_decayed = self.audio[-transition_samples:] * (start_amplitude * decay_curve)
+            audio2_decayed = other_audio_processor.audio[:transition_samples] * (end_amplitude * (1 - decay_curve))
+            mixed_audio_decay = np.concatenate((
+                self.audio[:-transition_samples], audio1_decayed + audio2_decayed, other_audio_processor.audio[transition_samples:]
+            ))
+
+            # Normalize to ensure consistent volume
+            max_val = np.max(np.abs(mixed_audio_decay))
+            if max_val > 1.0:
+                mixed_audio_decay = mixed_audio_decay / max_val
+
+            # Apply echo effect during the transition period
+            echo_samples = int(echo_delay * self.sample_rate)
+            echo_audio = np.copy(mixed_audio_decay)
+            for i in range(echo_samples, len(mixed_audio_decay)):
+                echo_audio[i] += echo_decay * mixed_audio_decay[i - echo_samples]
+
+            return echo_audio
+        else:
+            # Choose alternative transition method (e.g., crossfade)
+            return self.crossfade(other_audio_processor, transition_start_time=1)
+
+    def compute_audio_complexity(self):
+        """Compute audio complexity based on spectral features."""
+        # Calculate spectral centroid
+        spectral_centroid = librosa.feature.spectral_centroid(y=self.audio, sr=self.sample_rate)
+
+        # Calculate spectral bandwidth
+        spectral_bandwidth = librosa.feature.spectral_bandwidth(y=self.audio, sr=self.sample_rate)
+
+        # Calculate spectral contrast
+        spectral_contrast = librosa.feature.spectral_contrast(y=self.audio, sr=self.sample_rate)
+
+        # Calculate spectral flatness
+        spectral_flatness = librosa.feature.spectral_flatness(y=self.audio)
+
+        # Aggregate the complexity measures
+        complexity = np.mean(spectral_centroid) + np.mean(spectral_bandwidth) + np.mean(spectral_contrast) + np.mean(spectral_flatness)
+
+        return complexity
+
+def load_audio_files_from_directory(directory):
+    """Load audio files from a directory."""
+    audio_files = []
+    for file in os.listdir(directory):
+        if file.endswith(".wav"):
+            audio_files.append(os.path.join(directory, file))
+    return audio_files
+
+def get_latest_task_user_id(database_path):
+    """Get the user_id associated with the latest task_id in the scheduler table."""
+    conn = sqlite3.connect(database_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT user_id FROM scheduler ORDER BY task_id DESC LIMIT 1")
+    result = cursor.fetchone()
+    conn.close()
+    if result:
+        return result[0]
+    else:
+        raise Exception("No tasks found in the scheduler table.")
+
+if __name__ == "__main__":
+    pass
